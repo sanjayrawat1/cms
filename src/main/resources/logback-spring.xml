@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true">
+    <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
+
+    <springProperty scope="context" name="springAppName" source="spring.application.name" />
+
+    <appender name="LOGSTASH" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <patterns>
+                    <pattern>
+                        {
+                            "timestamp": "%date",
+                            "severity": "%level",
+                            "service": "${springAppName:-}",
+                            "traceId": "%X{traceId:-}",
+                            "spanId": "%X{spanId:-}",
+                            "pid": "${PID:-}",
+                            "thread": "%thread",
+                            "logger": "%logger",
+                            "message": "%message"
+                        }
+                    </pattern>
+                </patterns>
+                <stackTrace>
+                    <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                        <maxDepthPerThrowable>30</maxDepthPerThrowable>
+                        <maxLength>2048</maxLength>
+                        <shortenedClassNameLength>20</shortenedClassNameLength>
+                        <exclude>^sun\.reflect\..*\.invoke</exclude>
+                        <exclude>^net\.sf\.cglib\.proxy\.MethodProxy\.invoke</exclude>
+                        <rootCauseFirst>true</rootCauseFirst>
+                    </throwableConverter>
+                </stackTrace>
+            </providers>
+        </encoder>
+    </appender>
+
+    <springProfile name="dev">
+        <root level="${logging.level.root}">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="staging">
+        <root level="${logging.level.root}">
+            <appender-ref ref="LOGSTASH"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="prod">
+        <root level="${logging.level.root}">
+            <appender-ref ref="LOGSTASH"/>
+        </root>
+    </springProfile>
+</configuration>

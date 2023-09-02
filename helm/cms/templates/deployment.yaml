@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cms.fullname" . }}
+  labels:
+    {{- include "cms.labels" . | nindent 4 }}
+    app.kubernetes.io/name: {{ include "cms.name" }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/env: {{ .Values.env }}
+    helm.sh/chart: {{ include "cms.chart" }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "cms.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+        prometheus.io/path: "/management/prometheus"
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+      {{- end }}
+      labels:
+        {{- include "cms.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ include "cms.name" }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/env: {{ .Values.env }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "cms.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+
+      # mount secret as volume
+      volumes:
+        - name: {{ include "cms.secretsVolumeName" . }}
+          secret:
+            defaultMode: 420
+            secretName: {{ include "cms.secretsName" . }}
+
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "{{ .Values.springProfilesActive}}"
+            - name: MYSQL_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "cms.secretsName" . }}
+                  key: mysqlUsername # this is the key present in the GCPSM json file as key name
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /management/health/liveness
+              port: 8080
+          readinessProbe:
+            httpGet:
+              path: /management/health/readiness
+              port: 8080
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
